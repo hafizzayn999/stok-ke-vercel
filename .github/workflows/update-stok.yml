@@ -1,0 +1,66 @@
+name: Update Stok
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  update-stok:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install gspread google-auth
+
+      - name: Fetch Google Sheets → stok.json
+        env:
+          GSHEET_CREDENTIALS: ${{ secrets.GSHEET_CREDENTIALS }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+        run: |
+          python << 'EOF'
+          import json
+          import gspread
+          from google.oauth2.service_account import Credentials
+
+          # Load credentials dari GitHub Secret
+          creds_dict = json.loads("""${GSHEET_CREDENTIALS}""")
+
+          scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+          creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+
+          gc = gspread.authorize(creds)
+          sh = gc.open_by_key("${SPREADSHEET_ID}")
+          ws = sh.worksheet("vercel")
+
+          rows = ws.get_all_records()
+          data = []
+
+          for r in rows:
+              data.append({
+                  "sku": r["SKU"],
+                  "warna": r["WARNA"],
+                  "ukuran": int(r["UKURAN"]),
+                  "stok": int(r["STOK"])
+              })
+
+          with open("stok.json", "w") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+          EOF
+
+      - name: Commit & push stok.json
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add stok.json
+          git commit -m "auto update stok" || echo "no change"
+          git push
