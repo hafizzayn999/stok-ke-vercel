@@ -22,21 +22,23 @@ jobs:
         run: |
           pip install gspread google-auth
 
-      - name: Fetch Google Sheets → stok.json
+      - name: Decode credentials & fetch Google Sheets
         env:
-          GSHEET_CREDENTIALS: ${{ secrets.GSHEET_CREDENTIALS }}
+          GSHEET_CREDENTIALS_B64: ${{ secrets.GSHEET_CREDENTIALS_B64 }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
         run: |
+          echo "$GSHEET_CREDENTIALS_B64" | base64 -d > credentials.json
+
           python << 'EOF'
           import json
           import gspread
           from google.oauth2.service_account import Credentials
 
-          # Load credentials dari GitHub Secret
-          creds_dict = json.loads("""${GSHEET_CREDENTIALS}""")
-
           scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-          creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+          creds = Credentials.from_service_account_file(
+              "credentials.json",
+              scopes=scopes
+          )
 
           gc = gspread.authorize(creds)
           sh = gc.open_by_key("${SPREADSHEET_ID}")
@@ -48,8 +50,8 @@ jobs:
           for r in rows:
               data.append({
                   "sku": r["SKU"],
-                  "warna": r["WARNA"],
-                  "ukuran": int(r["UKURAN"]),
+                  "warna": r["WARN"],
+                  "ukuran": int(r["UKUR"]),
                   "stok": int(r["STOK"])
               })
 
